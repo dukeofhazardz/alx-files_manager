@@ -130,6 +130,68 @@ const FilesController = {
     }));
     return res.status(200).json(mappedFiles);
   },
+
+  async putPublish(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const key = `auth_${token}`;
+    const value = await redisClient.get(key);
+
+    if (!value) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = ObjectId(value);
+    const fileId = ObjectId(req.params.id);
+    const isFile = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: fileId, userId });
+    if (!isFile) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    await dbClient.client.db(dbClient.database).collection('files').updateOne({ _id: fileId, userId }, { $set: { isPublic: true } });
+
+    const file = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: fileId, userId });
+    return res.status(200).json({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId.toString(),
+      localPath: file.localPath,
+    });
+  },
+
+  async putUnpublish(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const key = `auth_${token}`;
+    const value = await redisClient.get(key);
+
+    if (!value) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = ObjectId(value);
+    const fileId = ObjectId(req.params.id);
+    const isFile = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: fileId, userId });
+    if (!isFile) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    await dbClient.client.db(dbClient.database).collection('files').updateOne({ _id: fileId, userId }, { $set: { isPublic: false } });
+
+    const file = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: fileId, userId });
+    return res.status(200).json({
+      id: file._id.toString(),
+      userId: file.userId.toString(),
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId.toString(),
+      localPath: file.localPath,
+    });
+  },
 };
 
 export default FilesController;
