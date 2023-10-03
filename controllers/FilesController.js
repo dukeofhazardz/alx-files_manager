@@ -1,3 +1,4 @@
+import mime from 'mime-types';
 import redisClient from '../utils/redis';
 
 const { ObjectId } = require('mongodb');
@@ -191,6 +192,31 @@ const FilesController = {
       parentId: file.parentId.toString(),
       localPath: file.localPath,
     });
+  },
+
+  async getFile(req, res) {
+    const token = req.headers['x-token'];
+    const key = `auth_${token}`;
+    const value = await redisClient.get(key);
+    const userId = ObjectId(value);
+    const fileId = ObjectId(req.params.id);
+    const file = await dbClient.client.db(dbClient.database).collection('files').findOne({ _id: fileId });
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (!file.isPublic && file.userId.toString() !== userId.toString()) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (file.type === 'folder') {
+      return res.status(400).json({ error: "A folder doesn't have content" });
+    }
+    if (!file.localPath || !fs.existsSync(file.localPath)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const mimeType = mime.lookup(file.name);
+    res.setHeader('Content-Type', mimeType);
+    const fileStream = fs.createReadStream(file.localPath);
+    return fileStream.pipe(res);
   },
 };
 
