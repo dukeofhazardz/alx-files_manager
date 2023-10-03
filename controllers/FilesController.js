@@ -1,6 +1,9 @@
 import mime from 'mime-types';
 import redisClient from '../utils/redis';
 
+const Queue = require('bull');
+
+const fileQueue = new Queue('fileQueue');
 const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
@@ -59,6 +62,8 @@ const FilesController = {
       };
 
       const result = await dbClient.client.db(dbClient.database).collection('files').insertOne(file);
+
+      fileQueue.add({ userId: value, fileId: result.insertedId });
 
       return res.status(201).json({
         id: result.insertedId,
@@ -212,6 +217,18 @@ const FilesController = {
     }
     if (!file.localPath || !fs.existsSync(file.localPath)) {
       return res.status(404).json({ error: 'Not found' });
+    }
+    const size = req.query.size ? parseInt(req.query.size, 10) : null;
+
+    if (size) {
+      const thumbnailPath = path.join(FOLDER_PATH, `${fileId}_${size}`);
+      if (!fs.existsSync(thumbnailPath)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      const mimeType = mime.lookup(file.name);
+      res.setHeader('Content-Type', mimeType);
+      const thumbnailStream = fs.createReadStream(thumbnailPath);
+      return thumbnailStream.pipe(res);
     }
     const mimeType = mime.lookup(file.name);
     res.setHeader('Content-Type', mimeType);
